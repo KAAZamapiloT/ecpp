@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-3.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/version-4.0-blue.svg" alt="Version">
   <img src="https://img.shields.io/badge/C++-17-purple.svg" alt="C++17">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build">
@@ -11,7 +11,7 @@
 
 ---
 
-**EC++** is a robust, blazingly fast, and feature-rich header-only Entity Component System (ECS) library written in pure C++17. In V3, EC++ transitioned to a **AAA-grade Archetype Storage model**, massively increasing cache performance for complex queries and enabling industry-standard game development.
+**EC++** is a blazingly fast, AAA-grade header-only Entity Component System (ECS) library written in pure C++17. More than just an ECS, it provides professional data-management tools for Game Engine development.
 
 ## 📖 Documentation
 
@@ -24,65 +24,79 @@ Want to dive deep into EC++? Check out our official documentation:
 
 ## ✨ Key Features
 
-*   **Archetype Storage**: Entities are physically grouped in memory by their exact component signature. Iterate over systems with zero cache-misses!
-*   **System Dependency Graph**: Automatically resolves execution order using Topological Sorting. Just define your dependencies, and the ECS updates them correctly.
-*   **Reactive Hooks**: Attach `OnComponentAdded` callbacks to instantly react to structural changes.
-*   **Dynamic Component Manager**: Add raw byte arrays to entities at runtime, allowing Lua or Python scripts to define components dynamically without recompiling C++.
-*   **Header-Only & Cross-Platform**: No dependencies. Just drop the `include/ecpp/` directory into your project on Windows, Linux, macOS, iOS, or Android!
+*   **Archetype Storage**: Iterate over systems with zero cache-misses! Entities are perfectly packed in memory.
+*   **System Dependency Graph**: Automatically resolves execution order using Topological Sorting.
+*   **Command Buffers (V4)**: Safely queue ECS mutations (Add/Remove Component, Create/Destroy Entity) across multiple threads during JobSystem execution.
+*   **Custom Memory Allocators (V4)**: Prevent heap fragmentation using built-in `LinearAllocator` and `PoolAllocator`.
+*   **Reflection & Editor Support (V4)**: Automatically expose C++ component data to your engine's UI Editor (e.g., ImGui) using our zero-dependency macro system.
+*   **Header-Only & Cross-Platform**: No dependencies. Just drop the `include/ecpp/` directory into your project!
+
+---
+
+## 🕹️ How to Integrate into Your Game Engine
+
+EC++ is intentionally designed **not** to take over your game loop or window management. It acts as a pure, high-performance data-management layer that seamlessly plugs into your existing architecture.
+
+1. **The Game Loop**: Simply call `gCoordinator.UpdateSystems(dt);` inside your engine's existing Fixed Update or variable Update loop. EC++ doesn't force a specific tick rate on you.
+2. **The Editor UI**: Read the `ecpp::ReflectionInfo<T>::GetFields()` arrays when rendering your ImGui or Qt Inspector windows. This allows your engine to automatically draw sliders and checkboxes without hardcoding UI for every component!
+3. **The Physics/Render Threads**: If your engine uses a custom thread pool for Physics or Render passes, pass an `ecpp::CommandBuffer` into those worker threads. They can freely queue Entity destructions and creations, and your engine can safely call `cmdBuf.Execute()` back on the main thread when the threads sync.
 
 ---
 
 ## 🚀 Quick Look
 
-Here is a glimpse of how clean and fast EC++ is:
+Here is a glimpse of the powerful tools available in V4:
 
-### 1. Archetype System Iteration (Max Performance)
-Your `System::Update` loops iterate over densely packed contiguous memory blocks.
+### Thread-Safe Command Buffers
+When using a Job System across multiple threads, you cannot safely destroy entities. Use `CommandBuffer` to queue changes and execute them safely later.
 
 ```cpp
-class PhysicsSystem : public ecpp::System {
-public:
-    void Update(ecpp::Coordinator& coord, float dt) override {
-        auto typePos = coord.GetComponentType<Position>();
-        auto typeVel = coord.GetComponentType<Velocity>();
-
-        // Iterate linearly through densely packed contiguous memory
-        for (ecpp::Archetype* arch : mArchetypes) {
-            for (size_t row = 0; row < arch->GetEntityCount(); ++row) {
-                Position& pos = *(Position*)arch->GetComponentPtr(typePos, row);
-                Velocity& vel = *(Velocity*)arch->GetComponentPtr(typeVel, row);
-                
-                pos.x += vel.dx * dt;
-                pos.y += vel.dy * dt;
-            }
-        }
+void DamageSystem::Update(ecpp::Coordinator& coord, ecpp::CommandBuffer& cmdBuf) {
+    // ... inside a worker thread
+    if (health.current <= 0) {
+        cmdBuf.QueueDestroyEntity(entity);
+    } else {
+        cmdBuf.QueueRemoveComponent<Damage>(entity);
     }
-};
+}
+
+// ... back on the main thread after jobs finish
+cmdBuf.Execute(coord);
 ```
 
-### 2. System Dependency Graph
-No more manual function calls. Define the graph and update everything at once.
+### C++ Reflection for Editor UIs
+Want to build an Inspector UI for your engine? Just reflect your components.
 
 ```cpp
-auto physicsSys = gCoordinator.RegisterSystem<PhysicsSystem>();
-auto renderSys = gCoordinator.RegisterSystem<RenderSystem>();
+ECPP_REFLECT_BEGIN(Position)
+    ECPP_REFLECT_FIELD(Position, x),
+    ECPP_REFLECT_FIELD(Position, y)
+ECPP_REFLECT_END()
 
-// Physics must ALWAYS run before Render
-gCoordinator.AddSystemDependency<PhysicsSystem, RenderSystem>();
-
-// Automatically resolves the graph and executes Systems
-gCoordinator.UpdateSystems(1.0f);
-```
-
-### 3. Reactive Hooks
-Run code the exact millisecond a component is structurally added.
-
-```cpp
-gCoordinator.OnComponentAdded<Name>([](ecpp::Entity e, Name& name) {
-    std::cout << "Entity " << e << " was named " << name.name << "\n";
-});
+// Later, automatically draw ImGui sliders dynamically:
+for (const auto& field : ecpp::ReflectionInfo<Position>::GetFields()) {
+    std::cout << field.name << " is of type " << field.typeName << "\n";
+}
 ```
 
 ---
 
-*Explore `examples/v3_main.cpp` for a complete showcase of all advanced features!*
+## 🛠️ Building & Running Examples
+
+Since EC++ is a header-only library, you don't need to build the library itself. However, you can easily compile and run the provided examples using any modern C++17 compiler (like `g++`, `clang++`, or MSVC).
+
+To run the **V4 Advanced Features Example** from your terminal:
+
+```bash
+# Compile the example
+g++ -std=c++17 examples/v4_main.cpp -o v4_example
+
+# Run the compiled executable
+./v4_example
+```
+
+### Included Examples
+
+*   **`examples/v4_main.cpp`** - A comprehensive showcase including Multithreaded Command Buffers, Pool Allocators, and the Reflection system.
+*   **`examples/spaceship_benchmark.cpp`** - A classic performance benchmark simulating thousands of spaceships iterating through boundary and movement systems at blazing speeds.
+*   **`examples/editor_ui_mockup.cpp`** - Demonstrates how to use the EC++ Reflection system to build a dynamic "ImGui-style" Inspector window for any component.
