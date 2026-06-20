@@ -1,75 +1,96 @@
-# Advanced Engine Features (V4)
+# Advanced Engine Features (V4-V6)
 
-EC++ V4 introduced powerful tools specifically designed for Game Engine developers building complex systems on top of the ECS.
+EC++ comes packed with professional tools designed specifically for Game Engine developers. If you are building a custom engine (similar to Godot or Unity), these tools will solve your hardest architectural problems.
 
-## 1. Command Buffers (Thread Safety)
+---
 
-When you parallelize your Systems using a Job System or Thread Pool, you cannot safely destroy entities or add/remove components while iterating over Archetypes. Doing so will cause memory corruption.
+## 1. Reflection (Building an Editor UI)
 
-The `CommandBuffer` solves this by recording mutations and safely playing them back later.
+### The Problem:
+If you look at Unity or Godot, when you click an object, an "Inspector" window pops up showing all its properties (Health, Speed, Color) with editable sliders. In standard C++, building this requires you to manually write UI code for every single component in your game. 
 
-```cpp
-// 1. Pass a CommandBuffer to your worker threads
-void WorkerThread(ecpp::Coordinator& coord, ecpp::CommandBuffer& cmdBuf) {
-    // 2. Queue mutations safely
-    cmdBuf.QueueDestroyEntity(someEntity);
-    cmdBuf.QueueAddComponent<Damage>(someEntity, Damage{50});
-}
-
-// 3. Back on the main thread, execute all queued mutations
-cmdBuf.Execute(coord);
-```
-
-## 2. Memory Allocators
-
-Game engines must tightly control memory allocations to prevent heap fragmentation and `malloc` overhead.
-
-### Linear Allocator
-The `LinearAllocator` is an extremely fast bump-pointer allocator. Use it for temporary data generated during a single frame. It clears instantly.
+### The EC++ Solution:
+EC++ provides a zero-dependency macro system that automatically parses your structs and exposes their metadata (names, types, and memory offsets) to your engine at runtime.
 
 ```cpp
-ecpp::LinearAllocator frameAlloc(1024 * 1024); // 1MB buffer
-void* tempMemory = frameAlloc.Allocate(256);
-// ... end of frame ...
-frameAlloc.Reset(); // O(1) clear
-```
-
-### Pool Allocator
-The `PoolAllocator` is perfect for spawning and destroying millions of identical objects (like bullets) without fragmenting the heap.
-
-```cpp
-// Allocate a pool for 10,000 blocks the size of a generic pointer
-ecpp::PoolAllocator bulletPool(sizeof(void*), 10000);
-
-void* bulletMemory = bulletPool.Allocate();
-bulletPool.Free(bulletMemory);
-```
-
-## 3. Reflection & Meta-Programming
-
-Building an Editor UI (like Unity's Inspector) requires reading component fields at runtime. C++ does not support this natively. EC++ provides a zero-dependency macro solution.
-
-### Registering a Struct
-```cpp
-struct Transform {
-    float x, y, z;
+struct Weapon {
+    int damage;
+    float range;
 };
 
-// Use the macros to reflect the struct
-ECPP_REFLECT_BEGIN(Transform)
-    ECPP_REFLECT_FIELD(Transform, x),
-    ECPP_REFLECT_FIELD(Transform, y),
-    ECPP_REFLECT_FIELD(Transform, z)
+// 1. Tell EC++ to analyze this struct
+ECPP_REFLECT_BEGIN(Weapon)
+    ECPP_REFLECT_FIELD(Weapon, damage),
+    ECPP_REFLECT_FIELD(Weapon, range)
 ECPP_REFLECT_END()
 ```
 
-### Using Reflection Data
-You can now iterate over the struct's fields dynamically at runtime. This allows you to draw UI sliders for *any* component without writing custom UI code!
+### The Use Case:
+In your engine's UI loop (using something like ImGui), you can now loop over ANY component dynamically. Your engine will automatically know that `damage` is an `int` and `range` is a `float`, allowing you to dynamically draw sliders without ever hardcoding `Weapon` into your UI logic!
+
+---
+
+## 2. JSON Serialization (Save/Load States)
+
+### The Problem:
+Implementing a "Save Game" feature usually requires writing massive, brittle functions that manually write every variable to a text file. If you add a new variable to a component, you have to remember to update your Save function, or the save file breaks.
+
+### The EC++ Solution:
+Because we built the Reflection system above, EC++ comes with an automated `Serializer`.
 
 ```cpp
-for (const auto& field : ecpp::ReflectionInfo<Transform>::GetFields()) {
-    std::cout << "Field Name: " << field.name << "\n";
-    std::cout << "Type Name: " << field.typeName << "\n";
-    std::cout << "Memory Offset: " << field.offset << "\n";
-}
+ecpp::Serializer serializer;
+serializer.RegisterComponentSerializer<Weapon>(coord);
+
+// Instantly dumps every living entity and their components into a formatted JSON file!
+serializer.SaveToJSON(coord, "savegame.json");
 ```
+
+### The Use Case:
+When a player hits "Quicksave", or when you want to save a Level you just built in your custom Editor, one line of code captures the entire Game State. You never have to manually write save/load boilerplate again.
+
+---
+
+## 3. Entity Hierarchies (Parent/Child Trees)
+
+### The Problem:
+ECS architectures are flat. Everything is just data in arrays. But games are hierarchical. 
+If a Player entity equips a Sword entity, the Sword needs to move when the Player moves. If the Player is destroyed, the Sword must also be destroyed.
+
+### The EC++ Solution:
+EC++ natively supports Linked Tree relationships directly inside the `Coordinator`. It does not use `std::vector` (which causes heap allocations and cache misses). It uses purely contiguous indices.
+
+```cpp
+ecpp::Entity player = coord.CreateEntity();
+ecpp::Entity sword = coord.CreateEntity();
+
+// The Sword is now physically parented to the Player.
+coord.AddChild(player, sword);
+```
+
+### The Use Case:
+This is exactly how Godot's `SceneTree` or Unity's `Transform` hierarchies work. You can use this to build complex multipart bosses (Torso -> Arm -> Hand -> Gun), or nested UI Canvas panels. If you call `coord.DestroyEntity(player)`, the sword and everything attached to it will automatically be cleaned up.
+
+---
+
+## 4. Command Buffers (Multithreading)
+
+### The Problem:
+To get maximum performance, you might want to run your Systems across a Thread Pool (a Job System). 
+However, what happens if Thread A decides to `DestroyEntity(1)` while Thread B is currently iterating over Entity 1? Your game crashes with a Segmentation Fault.
+
+### The EC++ Solution:
+You pass a `CommandBuffer` into your worker threads. Instead of immediately modifying the ECS, threads "queue" their requests.
+
+```cpp
+void WorkerThread(ecpp::Coordinator& coord, ecpp::CommandBuffer& cmdBuf) {
+    // We want to destroy this entity, but we queue it up instead of doing it instantly
+    cmdBuf.QueueDestroyEntity(entity);
+}
+
+// Back on the Main Thread, after all jobs finish safely:
+cmdBuf.Execute(coord); 
+```
+
+### The Use Case:
+If a massive fireball hits 50 enemies simultaneously across 8 different CPU threads, they all queue `QueueDestroyEntity()`. The Command Buffer prevents thread collisions, ensuring your engine remains absolutely stable while heavily parallelized.
