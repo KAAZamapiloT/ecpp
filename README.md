@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-5.0-blue.svg" alt="Version">
+  <img src="https://img.shields.io/badge/version-6.0-blue.svg" alt="Version">
   <img src="https://img.shields.io/badge/C++-17-purple.svg" alt="C++17">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/build-passing-brightgreen.svg" alt="Build">
@@ -27,11 +27,13 @@ Want to dive deep into EC++? Check out our official documentation:
 
 *   **Archetype Storage**: Iterate over systems with zero cache-misses! Entities are perfectly packed in memory.
 *   **System Dependency Graph**: Automatically resolves execution order using Topological Sorting.
+*   **Entity Hierarchies (V6)**: Built-in `coord.AddChild()` tree architecture. Effortlessly attach weapons to players or build nested UI panels.
+*   **JSON Serialization (V6)**: Save and Load entire game states directly to JSON using our zero-dependency `ecpp::Serializer`.
+*   **Spatial Hashing & Culling**: Built-in 2D/3D `SpatialHash` grid to instantly query millions of entities and rapidly cull off-screen objects.
+*   **Zero-Byte Tags**: Perform sparse iteration using empty components to perfectly pack "active" or "visible" entities into cache.
 *   **Command Buffers**: Safely queue ECS mutations (Add/Remove Component, Create/Destroy Entity) across multiple threads during JobSystem execution.
 *   **Custom Memory Allocators**: Prevent heap fragmentation using built-in `LinearAllocator` and `PoolAllocator`.
 *   **Reflection & Editor Support**: Automatically expose C++ component data to your engine's UI Editor (e.g., ImGui) using our zero-dependency macro system.
-*   **Spatial Hashing & Culling (V5)**: Built-in 2D/3D `SpatialHash` grid to instantly query millions of entities and rapidly cull off-screen objects.
-*   **Zero-Byte Tags (V5)**: Perform sparse iteration using empty components to perfectly pack "active" or "visible" entities into cache.
 *   **Header-Only & Cross-Platform**: No dependencies. Just drop the `include/ecpp/` directory into your project!
 
 ---
@@ -102,5 +104,6 @@ g++ -std=c++17 examples/v4_main.cpp -o v4_example
 
 *   **`examples/v4_main.cpp`** - A comprehensive showcase including Multithreaded Command Buffers, Pool Allocators, and the Reflection system.
 *   **`examples/spaceship_benchmark.cpp`** - A classic performance benchmark simulating thousands of spaceships iterating through boundary and movement systems at blazing speeds.
+*   **`examples/v6_serialization_hierarchy.cpp`** - Showcases creating parent/child entity relationships and saving the entire game state into a JSON file using zero-dependency reflection!
 *   **`examples/v5_sparse_rendering.cpp`** - Showcases zero-byte tag culling by updating thousands of entities in a `SpatialHash` grid and rapidly rendering only the objects within the Camera's Viewport.
 *   **`examples/editor_ui_mockup.cpp`** - Demonstrates how to use the EC++ Reflection system to build a dynamic "ImGui-style" Inspector window for any component.

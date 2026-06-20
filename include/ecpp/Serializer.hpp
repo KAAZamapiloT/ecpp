@@ -1,114 +1,93 @@
 #pragma once
 
 #include "Coordinator.hpp"
+#include "Reflection.hpp"
+#include <string>
+#include <vector>
 #include <fstream>
-#include <unordered_map>
-#include <functional>
-#include <iostream>
+#include <sstream>
 
 namespace ecpp {
 
-// A lightweight binary serializer for ECS State.
+// A zero-dependency, lightweight JSON Serializer for EC++ Game States.
+// Leverages the C++ Reflection macros to dynamically save ECS data.
 class Serializer {
 public:
-    Serializer(Coordinator& coordinator) : mCoordinator(coordinator) {}
+    using SerializeFn = std::string(*)(void*);
 
-    // Register serialization lambdas for a component type.
-    // saveFunc: writes component data to the ostream.
-    // loadFunc: reads component data from the istream.
-    template <typename T>
-    void RegisterComponent(std::function<void(const T&, std::ostream&)> saveFunc,
-                           std::function<void(T&, std::istream&)> loadFunc) {
-        ComponentType type = mCoordinator.GetComponentType<T>();
+    template<typename T>
+    void RegisterComponentSerializer(Coordinator& coord) {
+        ComponentType typeId = coord.GetComponentType<T>();
         
-        mSaveFuncs[type] = [this, saveFunc](Entity e, std::ostream& os) {
-            auto& comp = mCoordinator.GetComponent<T>(e);
-            saveFunc(comp, os);
+        mSerializers[typeId] = [](void* data) -> std::string {
+            std::stringstream ss;
+            ss << "{";
+            
+            auto fields = ReflectionInfo<T>::GetFields();
+            for (size_t i = 0; i < fields.size(); ++i) {
+                const auto& field = fields[i];
+                void* fieldPtr = (uint8_t*)data + field.offset;
+                
+                ss << "\"" << field.name << "\":";
+
+                if (field.typeName == "i") {
+                    ss << *(int*)fieldPtr;
+                } else if (field.typeName == "f") {
+                    ss << *(float*)fieldPtr;
+                } else if (field.typeName == "b") {
+                    ss << (*(bool*)fieldPtr ? "true" : "false");
+                } else {
+                    ss << "0"; 
+                }
+
+                if (i < fields.size() - 1) ss << ",";
+            }
+            ss << "}";
+            return ss.str();
         };
-        
-        mLoadFuncs[type] = [this, loadFunc](Entity e, std::istream& is) {
-            T comp;
-            loadFunc(comp, is);
-            mCoordinator.AddComponent(e, comp);
-        };
+
+        mComponentNames[typeId] = ReflectionInfo<T>::GetName();
     }
 
-    // Saves all active entities and their registered components to a binary file.
-    void SaveToFile(const std::string& filepath) {
-        std::ofstream os(filepath, std::ios::binary);
-        if (!os.is_open()) {
-            std::cerr << "Failed to open file for saving: " << filepath << "\n";
-            return;
-        }
+    void SaveToJSON(Coordinator& coord, const std::string& filepath) {
+        std::ofstream file(filepath);
+        if (!file.is_open()) return;
 
-        auto activeEntities = mCoordinator.GetActiveEntities();
-        
-        // Write total number of entities
-        uint32_t entityCount = activeEntities.size();
-        os.write(reinterpret_cast<const char*>(&entityCount), sizeof(uint32_t));
+        file << "{\n  \"entities\": [\n";
 
-        for (Entity entity : activeEntities) {
-            os.write(reinterpret_cast<const char*>(&entity), sizeof(Entity));
+        bool firstEntity = true;
+        for (Entity e = 0; e < MAX_ENTITIES; ++e) {
+            if (!coord.IsAlive(e)) continue;
+
+            if (!firstEntity) file << ",\n";
+            file << "    {\n      \"id\": " << e << ",\n      \"components\": {\n";
+
+            bool firstComponent = true;
+            Signature sig = coord.GetEntitySignature(e);
             
-            Signature sig = mCoordinator.GetEntitySignature(entity);
-            
-            for (size_t i = 0; i < MAX_COMPONENTS; ++i) {
-                if (sig.test(i) && mSaveFuncs.find(i) != mSaveFuncs.end()) {
-                    ComponentType typeId = static_cast<ComponentType>(i);
-                    os.write(reinterpret_cast<const char*>(&typeId), sizeof(ComponentType));
-                    mSaveFuncs[typeId](entity, os);
+            for (ComponentType typeId = 0; typeId < MAX_COMPONENTS; ++typeId) {
+                if (sig.test(typeId) && mSerializers.find(typeId) != mSerializers.end()) {
+                    if (!firstComponent) file << ",\n";
+                    
+                    void* rawPtr = coord.GetComponentRaw(e, typeId);
+                    if (rawPtr) {
+                        file << "        \"" << mComponentNames[typeId] << "\": " << mSerializers[typeId](rawPtr);
+                        firstComponent = false;
+                    }
                 }
             }
-            
-            // Marker for end of components for this entity
-            ComponentType endMarker = MAX_COMPONENTS;
-            os.write(reinterpret_cast<const char*>(&endMarker), sizeof(ComponentType));
-        }
-    }
 
-    // Loads entities and components from file.
-    // Returns a map from the old Entity ID (in the file) to the newly created Entity ID.
-    // Use this map to fix any components that store Entity IDs (like HierarchyComponent).
-    std::unordered_map<Entity, Entity> LoadFromFile(const std::string& filepath) {
-        std::unordered_map<Entity, Entity> idMap;
-        
-        std::ifstream is(filepath, std::ios::binary);
-        if (!is.is_open()) {
-            std::cerr << "Failed to open file for loading: " << filepath << "\n";
-            return idMap;
+            file << "\n      }\n    }";
+            firstEntity = false;
         }
 
-        uint32_t entityCount = 0;
-        if (!is.read(reinterpret_cast<char*>(&entityCount), sizeof(uint32_t))) return idMap;
-
-        for (uint32_t i = 0; i < entityCount; ++i) {
-            Entity oldEntity;
-            is.read(reinterpret_cast<char*>(&oldEntity), sizeof(Entity));
-            
-            Entity newEntity = mCoordinator.CreateEntity();
-            idMap[oldEntity] = newEntity;
-
-            while (true) {
-                ComponentType typeId;
-                is.read(reinterpret_cast<char*>(&typeId), sizeof(ComponentType));
-                
-                if (typeId == MAX_COMPONENTS) {
-                    break; // End of components for this entity
-                }
-                
-                if (mLoadFuncs.find(typeId) != mLoadFuncs.end()) {
-                    mLoadFuncs[typeId](newEntity, is);
-                }
-            }
-        }
-        
-        return idMap;
+        file << "\n  ]\n}\n";
+        file.close();
     }
 
 private:
-    Coordinator& mCoordinator;
-    std::unordered_map<ComponentType, std::function<void(Entity, std::ostream&)>> mSaveFuncs;
-    std::unordered_map<ComponentType, std::function<void(Entity, std::istream&)>> mLoadFuncs;
+    std::unordered_map<ComponentType, SerializeFn> mSerializers;
+    std::unordered_map<ComponentType, std::string> mComponentNames;
 };
 
 } // namespace ecpp

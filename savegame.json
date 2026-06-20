@@ -1,0 +1,25 @@
+{
+  "entities": [
+    {
+      "id": 0,
+      "components": {
+        "Transform": {"x":100,"y":200},
+        "PlayerInfo": {"health":100,"ammo":50}
+      }
+    },
+    {
+      "id": 1,
+      "components": {
+        "Transform": {"x":5,"y":0},
+        "WeaponInfo": {"damage":25,"isMelee":true}
+      }
+    },
+    {
+      "id": 2,
+      "components": {
+        "Transform": {"x":-5,"y":0},
+        "WeaponInfo": {"damage":15,"isMelee":false}
+      }
+    }
+  ]
+}

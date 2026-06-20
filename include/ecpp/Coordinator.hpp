@@ -180,6 +180,16 @@ public:
         return mEntityManager->GetSignature(entity).test(GetComponentType<T>());
     }
 
+    void* GetComponentRaw(Entity entity, ComponentType type) {
+        EntityRecord record = mEntityRecords[entity];
+        if (!mEntityManager->GetSignature(entity).test(type)) return nullptr;
+        return record.archetype->GetComponentPtr(type, record.row);
+    }
+
+    bool IsAlive(Entity entity) const {
+        return mEntityManager->IsAlive(entity);
+    }
+
     template <typename T>
     ComponentType GetComponentType() {
         return mComponentTypes.at(typeid(T));

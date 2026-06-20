@@ -1,2 +1,5 @@
 examples/*_run
 *.o
+*.bin
+*.exe
+v4_example
