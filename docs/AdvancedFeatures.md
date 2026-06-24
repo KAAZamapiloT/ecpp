@@ -1,3 +1,7 @@
+[Home](../README.md) | [Getting Started](GettingStarted.md) | [Architecture](Architecture.md) | **Advanced Features** | [API Reference](API_Reference.md)
+
+---
+
 # Advanced Engine Features (V4-V6)
 
 EC++ comes packed with professional tools designed specifically for Game Engine developers. If you are building a custom engine (similar to Godot or Unity), these tools will solve your hardest architectural problems.

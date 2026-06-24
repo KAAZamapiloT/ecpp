@@ -3,3 +3,4 @@ examples/*_run
 *.bin
 *.exe
 v4_example
+savegame.bin

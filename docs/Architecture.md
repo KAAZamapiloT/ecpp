@@ -1,3 +1,7 @@
+[Home](../README.md) | [Getting Started](GettingStarted.md) | **Architecture** | [Advanced Features](AdvancedFeatures.md) | [API Reference](API_Reference.md)
+
+---
+
 # The EC++ Architecture (Under the Hood)
 
 Understanding how EC++ manages memory will help you write games that can process millions of entities at 60 Frames Per Second.

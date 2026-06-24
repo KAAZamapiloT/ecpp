@@ -20,6 +20,7 @@ Want to dive deep into EC++? Check out our official documentation:
 *   **[Getting Started Guide](docs/GettingStarted.md)** - Learn how to initialize the library and create your first entities.
 *   **[Architecture Overview](docs/Architecture.md)** - Understand the power of Archetypes and how EC++ manages memory under the hood.
 *   **[Advanced Engine Features](docs/AdvancedFeatures.md)** - Master V4 tools like Command Buffers, Custom Allocators, and Reflection.
+*   **[API Reference](docs/API_Reference.md)** - Complete documentation of all public interfaces, classes, and macros.
 
 ---
 

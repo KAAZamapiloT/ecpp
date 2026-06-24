@@ -1,3 +1,7 @@
+[Home](../README.md) | **Getting Started** | [Architecture](Architecture.md) | [Advanced Features](AdvancedFeatures.md) | [API Reference](API_Reference.md)
+
+---
+
 # Getting Started with EC++
 
 Welcome to EC++! If you are building a game engine or a highly-optimized game, you've come to the right place. EC++ is a purely data-driven Entity Component System (ECS). 
